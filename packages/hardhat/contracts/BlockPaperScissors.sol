@@ -40,6 +40,8 @@ contract BlockPaperScissors is ERC1155 {
     mapping(address => Player) public players;
     mapping(uint256 => GameMatch) public matches;
     mapping(uint256 => NFTMetadata) public nftMetadatas;
+   
+    mapping(address => uint256) private activeMatches;
 
     constructor() ERC1155("https://blockpaperscissorc.xyz/metadata/{id}.json") {}
 
@@ -85,8 +87,15 @@ contract BlockPaperScissors is ERC1155 {
     }
 
     function initiateMatch() public returns (uint256) {
+        // Check if the player is already in an active match
+        require(activeMatches[msg.sender] == 0 || matches[activeMatches[msg.sender]].isResolved, "Player is already in an active match");
+
         _matchIds.increment();
         uint256 newMatchId = _matchIds.current();
+
+        // Set the current match as the player's active match
+        activeMatches[msg.sender] = newMatchId;
+
         matches[newMatchId] = GameMatch(newMatchId, msg.sender, address(0), 0, 0, Move.None, Move.None, block.number, false);
         return newMatchId;
     }
@@ -95,6 +104,7 @@ contract BlockPaperScissors is ERC1155 {
         GameMatch storage gameMatch = matches[matchId];
         require(gameMatch.player2 == address(0), "Match already has two players");
         gameMatch.player2 = msg.sender;
+        activeMatches[msg.sender] = matchId;
     }
 
     function commitMove(uint256 matchId, bytes32 hashedMove) public {
@@ -139,6 +149,10 @@ contract BlockPaperScissors is ERC1155 {
         players[winner].totalWins += 1;
         updateStatsAndMetadata(winner, gameMatch.reveal1);
         gameMatch.isResolved = true;
+
+        activeMatches[matches[matchId].player1] = 0;
+        activeMatches[matches[matchId].player2] = 0;
+        
         nftMetadatas[players[winner].nftId].totalMatches += 1;
     }
 
